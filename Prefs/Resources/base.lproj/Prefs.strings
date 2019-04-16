@@ -1,0 +1,40 @@
+{
+  "ENABLED" = "Enabled";
+  "INVERTED" = "Inverted";
+  "THICKNESS" = "Thickness";
+  "COLOR" = "Color";
+  "SHADOW_COLOR" = "Shadow color";
+  "TOP" = "Top";
+  "LEFT" = "Left";
+  "RIGHT" = "Right";
+  "BOTTOM" = "Bottom";
+  "POSITION" = "Position";
+  "SHADOW" = "Shadow";
+  "COLOR" = "Color";
+  "MEDIA_COLOR" = "Color: media volume";
+  "RINGER_COLOR" = "Color: ringer volume";
+  "GRADIENT" = "Gradient";
+  "BACKGROUND" = "Background";
+  "LAYOUT" = "Layout";
+  "SIZE" = "Size (length)";
+  "OFFSET" = "Distance from the edge";
+  "HORIZONTAL_OFFSET" = "Horizontal offset";
+  "VERTICAL_OFFSET" = "Vertical offset";
+  "CORNER_RADIUS" = "Corner radius";
+  "OPACITY" = "Opacity";
+  "DISABLE_ANIMATIONS" = "Disable animations";
+  "PRESET" = "Saved settings";
+
+  "SOURCE_CODE" = "Source code";
+  "DONATE_TO_NEPETA" = "Donate to Nepeta";
+  "SUPPORT_ME" = "Support me!";
+  "RESET_PREFS" = "Restore default settings and respring";
+  "RESPRING" = "Respring";
+  "ARE_YOU_SURE_TO_RESET_PREFS" = "Are you sure you want to reset all your preferences? This cannot be undone.";
+  "TEST_BANNER" = "Test banner";
+  "SAVE_SETTINGS" = "Save current settings";
+  "SHARE_SETTINGS" = "Share current settings";
+  "IMPORT_SETTINGS" = "Import shared preset";
+  "OK" = "OK";
+  "CANCEL" = "Cancel";
+}
