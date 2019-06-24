@@ -1,350 +1,260 @@
-#import <Cephei/HBPreferences.h>
-#import <libcolorpicker.h>
-#import "Tweak.h"
+#import "VolHUD.h"
+#import "MRYHUDView.h"
 
-HBPreferences *preferences;
+#define screenHeight [UIScreen mainScreen].bounds.size.height
+#define screenWidth [UIScreen mainScreen].bounds.size.width
+#define animDuration 0.2
 
-BOOL dpkgInvalid = false;
-BOOL enabled = true;
-BOOL disableAnimations = false;
-BOOL hasShadow = true;
-BOOL backgroundShadow = true;
-BOOL inverted = false;
-BOOL gradient = false;
-BOOL background = true;
-NSInteger location = 0; // 0: top; 1: right; 2: bottom; 3: left
-CGFloat thickness = 5;
-CGFloat size = 1.0;
-CGFloat offset = 0;
-CGFloat horizontalOffset = 0;
-CGFloat verticalOffset = 0;
-CGFloat cornerRadius = 0;
-CGFloat opacity = 1.0;
-UIColor *mediaColor = nil;
-UIColor *ringerColor = nil;
-UIColor *gradientColor = nil;
-UIColor *backgroundColor = nil;
-UIView *lastHUD = nil;
+//prefs:
+#define kUseCustomYPadding PreferencesBool(@"kUseCustomYPadding", NO)
+#define kYPadding PreferencesFloat(@"kYPadding", 75.)
+#define kUseCustomHeight PreferencesBool(@"kUseCustomHeight", NO)
+#define kHeight PreferencesFloat(@"kHeight", 150.)
+#define kHideRinger PreferencesBool(@"kHideRinger", NO)
+#define dismissDelay PreferencesFloat(@"kTimeout", 1.5)
+#define collapseDelay PreferencesFloat(@"kCollapseTimeout", 1.)
 
-@implementation FLHGradientLayer
+#define HUDXPadding 15.
+#define HUDHeightMultiplier 0.22
+#define HUDYMultiplier 0.22
+#define HUDWidth 60.
+#define HUDCollapsedWidth 12.
+CGRect expandedFrame()
+{
+	UIInterfaceOrientation orientation = [(SpringBoard*)[UIApplication sharedApplication] activeInterfaceOrientation];
+	BOOL landscape = UIInterfaceOrientationIsLandscape(orientation);
 
-- (id<CAAction>)actionForKey:(NSString *)event {
-    if (disableAnimations) return nil;
-    return [super actionForKey:event];
+	CGFloat yPadding;
+	CGFloat height;
+	CGFloat xPadding = HUDXPadding;
+
+	if (!landscape)
+	{
+		height = kUseCustomHeight ? kHeight : (screenHeight * HUDHeightMultiplier);
+		yPadding = kUseCustomYPadding ? kYPadding : ((screenHeight * HUDYMultiplier) - (height / 2));
+	}
+	else
+	{
+		height = screenWidth * 1./3.;
+		yPadding = (screenWidth - height) / 2;
+
+		if (orientation == UIInterfaceOrientationLandscapeRight)
+		{
+			xPadding = screenHeight - HUDWidth - HUDXPadding;
+		}
+	}
+	
+	//round height to nearest multiple of 2
+	height = round(height);
+	if (((int)height % 2) != 0)
+		height++;
+	
+	return CGRectMake(xPadding, yPadding, HUDWidth, height);
+}
+CGRect startFrame()
+{
+	CGRect f = expandedFrame();
+	CGFloat xPosition = f.size.width * -1.;
+	UIInterfaceOrientation orientation = [(SpringBoard*)[UIApplication sharedApplication] activeInterfaceOrientation];
+	if (orientation == UIInterfaceOrientationLandscapeRight)
+	{
+		xPosition = screenWidth + f.size.width;
+	}
+	return CGRectMake(xPosition, f.origin.y, f.size.width, f.size.height);
+}
+CGRect collapsedFrame()
+{
+	CGRect f = expandedFrame();
+	CGFloat xPosition = f.origin.x;
+	UIInterfaceOrientation orientation = [(SpringBoard*)[UIApplication sharedApplication] activeInterfaceOrientation];
+	if (orientation == UIInterfaceOrientationLandscapeRight)
+	{
+		xPosition = screenHeight - HUDXPadding - HUDCollapsedWidth;
+	}
+	return CGRectMake(xPosition, f.origin.y, HUDCollapsedWidth, f.size.height);
 }
 
-@end
-
-CGRect getFrameForProgress(float progress, CGRect bounds) {
-    CGFloat fullLength = 0;
-    CGFloat x = bounds.size.width * horizontalOffset;
-    CGFloat y = bounds.size.height * verticalOffset;
-
-    switch (location) {
-        case 1:
-        case 3:
-            fullLength = bounds.size.height;
-            break;
-        default:
-            fullLength = bounds.size.width;
-            break;
-    }
-
-
-    CGFloat length = fullLength * size;
-    CGFloat sizeOffset = (fullLength - length) / 2.0;
-
-    if (inverted) {
-        switch (location) {
-            case 0: //top
-                return CGRectMake(x + length + sizeOffset - length * progress,
-                                y + offset,
-                                length * progress,
-                                thickness);
-            case 1: //right
-                return CGRectMake(x + bounds.size.width - thickness - offset,
-                                y + sizeOffset,
-                                thickness,
-                                length * progress);
-            case 2: //bottom
-                return CGRectMake(x + length + sizeOffset - length * progress,
-                                y + bounds.size.height - thickness - offset,
-                                length * progress,
-                                thickness);
-            default: //left
-                return CGRectMake(x + offset,
-                                y + sizeOffset,
-                                thickness,
-                                length * progress);
-        }
-    }
-
-    switch (location) {
-        case 0: //top
-            return CGRectMake(x + sizeOffset,
-                            y + offset,
-                            length * progress,
-                            thickness);
-        case 1: //right
-            return CGRectMake(x + bounds.size.width - thickness - offset,
-                            y + length + sizeOffset - length * progress,
-                            thickness,
-                            length * progress);
-        case 2: //bottom
-            return CGRectMake(x + sizeOffset,
-                            y + bounds.size.height - thickness - offset,
-                            length * progress,
-                            thickness);
-        default: //left
-            return CGRectMake(x + offset,
-                            y + length + sizeOffset - length * progress,
-                            thickness,
-                            length * progress);
-    }
+//prefs:
+#define domain @"com.yakir.volhud"
+BOOL PreferencesBool(NSString* key, BOOL fallback)
+{
+	id val = [[NSUserDefaults standardUserDefaults] objectForKey:key inDomain:domain];
+	return val ? [val boolValue] : fallback;
+}
+CGFloat PreferencesFloat(NSString* key, CGFloat fallback)
+{
+	id val = [[NSUserDefaults standardUserDefaults] objectForKey:key inDomain:domain];
+	return val ? [val floatValue] : fallback;
 }
 
-CGSize getShadowOffset() {
-    switch (location) {
-        case 0: //top
-            return CGSizeMake(0, thickness/2.0);
-        case 1: //right
-            return CGSizeMake(-thickness/2.0, 0);
-        case 2: //bottom
-            return CGSizeMake(0, -thickness/2.0);
-        default: //left
-            return CGSizeMake(thickness/2.0, 0);
-    }
+%hook SBHUDController
+%property (nonatomic, retain) MRYHUDView* mryHUD;
+%property (nonatomic, retain) NSTimer* displayTimer;
+%property (nonatomic, retain) NSTimer* collapseTimer;
+
+-(void)presentHUDView:(UIView*)oldHUD autoDismissWithDelay:(double)delay
+{
+	if (![oldHUD isKindOfClass:%c(SBRingerHUDView)])
+	{
+		delay = dismissDelay;
+
+		//hide old HUD:
+		oldHUD.hidden = YES;
+		%orig;
+
+		//invalidate old timer:
+		if (self.displayTimer)
+		{
+			[self.displayTimer invalidate];
+			self.displayTimer = nil;
+		}
+
+		//create new hide timer:
+		self.displayTimer = [NSTimer scheduledTimerWithTimeInterval:delay
+								target:self
+								selector:@selector(hideMRYHUD)
+								userInfo:nil repeats:NO];
+		
+		void (^collapseBlock)(void) = ^{
+			[self.mryHUD collapseAnimated:YES];
+		};
+
+		//collapse after a certain time
+		if (!self.collapseTimer.valid)
+		{
+			self.collapseTimer = [NSTimer scheduledTimerWithTimeInterval:collapseDelay
+									target:collapseBlock
+									selector:@selector(invoke)
+									userInfo:nil repeats:NO];
+		}
+
+		[self showMRYHUD];
+	}
+	else
+	{
+		//remove old HUD:
+		if (kHideRinger)
+			oldHUD = nil;
+		%orig;
+	}
 }
 
-CGPoint getStartPoint() {
-    switch (location) {
-        case 0: //top
-            return CGPointMake(0.0, 0.5);
-        case 1: //right
-            return CGPointMake(0.5, 1.0);
-        case 2: //bottom
-            return CGPointMake(0.0, 0.5);
-        default: //left
-            return CGPointMake(0.5, 1.0);
-    }
+-(void)_tearDown
+{
+	self.mryHUD = nil;
+	%orig;
 }
 
-CGPoint getEndPoint() {
-    switch (location) {
-        case 0: //top
-            return CGPointMake(1.0, 0.5);
-        case 1: //right
-            return CGPointMake(0.5, 0.0);
-        case 2: //bottom
-            return CGPointMake(1.0, 0.5);
-        default: //left
-            return CGPointMake(0.5, 0.0);
-    }
-}
-
-%group FlashyHUD
-
-%hook SBHUDView
-
-%property (nonatomic, retain) FLHGradientLayer *flhLayer;
-%property (nonatomic, retain) FLHGradientLayer *flhBackgroundLayer;
-
+//create a brand new HUD
 %new
--(float)flhRealProgress {
-    if ([self respondsToSelector:@selector(isSilent)] && [((SBRingerHUDView *)self) isSilent]) {
-        return 0.0;
-    }
+-(void)createMRYHUD
+{
+	if (self.mryHUD.superview)
+		[self.mryHUD removeFromSuperview];
 
-    return self.progress;
+	//get HUD window:
+	UIWindow* hudWindow = MSHookIvar<UIWindow*>(self, "_hudWindow");
+
+	//create new HUD:
+	self.mryHUD = [[MRYHUDView alloc] initWithFrame:startFrame()];
+	[hudWindow addSubview:self.mryHUD];
 }
 
--(void)layoutSubviews {
-    %orig;
+//show the HUD (animated)
+%new
+-(void)showMRYHUD
+{
+	if (!self.mryHUD || self.mryHUD.hidden)
+	{
+		//create HUD if it doesn't already exist:
+		[self createMRYHUD];
 
-    lastHUD = self;
-
-    UIColor *color = mediaColor;
-    if ([self isKindOfClass:%c(SBRingerHUDView)] || ([self respondsToSelector:@selector(mode)] && [((SBVolumeHUDView *)self) mode] == 1)) {
-        color = ringerColor;
-    }
-
-    CGRect bounds = [[UIScreen mainScreen] bounds];
-    self.frame = bounds;
-    self.alpha = opacity;
-
-    if (!self.flhBackgroundLayer) {
-        self.layer.sublayers = nil;
-        self.layer.masksToBounds = NO;
-        self.flhBackgroundLayer = [[FLHGradientLayer alloc] init];
-        self.flhBackgroundLayer.masksToBounds = NO;
- 
-        [self.layer addSublayer:self.flhBackgroundLayer];
-    }
-
-    if (!self.flhLayer) {
-        self.flhLayer = [[FLHGradientLayer alloc] init];
-        self.flhLayer.masksToBounds = NO;
- 
-        [self.layer addSublayer:self.flhLayer];
-    }
-
-    self.flhBackgroundLayer.frame = getFrameForProgress(1.0, bounds);
-    if (background) {
-        self.flhBackgroundLayer.backgroundColor = backgroundColor.CGColor;
-    } else {
-        self.flhBackgroundLayer.backgroundColor = [UIColor clearColor].CGColor;
-    }
-
-    self.flhLayer.backgroundColor = color.CGColor;
-
-    self.flhLayer.frame = getFrameForProgress([self flhRealProgress], bounds);
-    self.flhLayer.startPoint = getStartPoint();
-    self.flhLayer.endPoint = getEndPoint();
-
-    self.flhLayer.cornerRadius = cornerRadius;
-    self.flhBackgroundLayer.cornerRadius = cornerRadius;
-
-    if (hasShadow) {
-        self.flhLayer.shadowOpacity = 0.5;
-        self.flhLayer.shadowRadius = thickness;
-        self.flhLayer.shadowColor = color.CGColor;
-        self.flhLayer.shadowOffset = getShadowOffset();
-    } else {
-        self.flhLayer.shadowOpacity = 0;
-    }
-
-    if (backgroundShadow) {
-        self.flhBackgroundLayer.shadowOpacity = 0.5;
-        self.flhBackgroundLayer.shadowRadius = thickness;
-        self.flhBackgroundLayer.shadowColor = backgroundColor.CGColor;
-        self.flhBackgroundLayer.shadowOffset = getShadowOffset();
-    } else {
-        self.flhBackgroundLayer.shadowOpacity = 0;
-    }
-
-    if (gradient) {
-        self.flhLayer.colors = @[(id)color.CGColor, (id)gradientColor.CGColor];
-    } else {
-        self.flhLayer.colors = nil;
-    }
+		[self.mryHUD expandAnimated:NO];
+		self.mryHUD.hidden = NO;
+		[UIView animateWithDuration:animDuration animations:^{
+			self.mryHUD.frame = expandedFrame();
+		}];
+	}
 }
 
--(void)addSubview:(id)xxx {
-    //noop
+//hide the HUD (animated)
+%new
+-(void)hideMRYHUD
+{
+	if (!self.mryHUD.hidden)
+	{
+		[UIView animateWithDuration:animDuration animations:^{
+			self.mryHUD.frame = startFrame();
+		} completion:^(BOOL finished){
+			self.mryHUD.hidden = YES;
+		}];
+	}
 }
 
--(void)insertSubview:(id)xxx atIndex:(int)x {
-    //noop
+//is showing the MRYHUD
+%new
+-(BOOL)isHUDVisible
+{
+	return self.mryHUD && !self.mryHUD.hidden;
 }
-
--(void)setProgress:(float)arg1 {
-    %orig;
-
-    CGRect bounds = [[UIScreen mainScreen] bounds];
-    self.flhLayer.frame = getFrameForProgress([self flhRealProgress], bounds);
-}
-
 %end
 
+//allow touches:
 %hook SBHUDWindow
+-(BOOL)_ignoresHitTest
+{
+	return NO;
+}
 
--(void)setHidden:(BOOL)hidden {
-    if (hidden == self.hidden) return;
-    %orig;
-    
-    if (hidden) return;
-
-    if (disableAnimations) {
-        self.alpha = 1.0;
-        return;
+-(id)hitTest:(CGPoint)arg1 withEvent:(id)arg2
+{
+	MRYHUDView* mryHUD = ((SBHUDController*)[%c(SBHUDController) sharedHUDController]).mryHUD;
+	if (CGRectContainsPoint(mryHUD.frame, arg1))
+	{
+		CGPoint p = [(UIWindow*)self convertPoint:arg1 toView:mryHUD];
+        return [mryHUD hitTest:p withEvent:arg2];
     }
-    
-    self.alpha = 0.0;
-    [UIView animateWithDuration:0.15 delay:0 options:UIViewAnimationOptionCurveLinear animations:^{
-        self.alpha = 1.0;
-    } completion:nil];
+	return %orig;
 }
-
 %end
 
-%end
-
-%group FlashyHUDIntegrityFail
-
-%hook SpringBoard
-
--(void)applicationDidFinishLaunching:(id)arg1 {
-    %orig;
-    if (!dpkgInvalid) return;
-    UIAlertController *alertController = [UIAlertController
-        alertControllerWithTitle:@"😡😡😡"
-        message:@"The build of FlashyHUD you're using comes from an untrusted source. Pirate repositories can distribute malware and you will get subpar user experience using any tweaks from them.\nRemember: FlashyHUD is free. Uninstall this build and install the proper version of FlashyHUD from:\nhttps://repo.nepeta.me/\n(it's free, damnit, why would you pirate that!?)"
-        preferredStyle:UIAlertControllerStyleAlert
-    ];
-
-    [alertController addAction:[UIAlertAction actionWithTitle:@"Damn!" style:UIAlertActionStyleDefault handler:^(UIAlertAction *action) {
-        [((UIApplication*)self).keyWindow.rootViewController dismissViewControllerAnimated:YES completion:NULL];
-    }]];
-
-    [((UIApplication*)self).keyWindow.rootViewController presentViewController:alertController animated:YES completion:NULL];
+//override corner radius of fill layer:
+void (*oldSetCornerRadius)(CCUIVolumeSliderView* self, SEL _cmd, CGFloat arg1);
+void newSetCornerRadius(CCUIVolumeSliderView* self, SEL _cmd, CGFloat arg1)
+{
+	if ([self.window isKindOfClass:%c(SBHUDWindow)])
+		arg1 = 0.;
+	(*oldSetCornerRadius)(self, _cmd, arg1);
 }
 
-%end
-
-%end
-
-void refreshHUD() {
-    [CATransaction begin];
-    [CATransaction setDisableActions: YES];
-    [lastHUD layoutSubviews];
-    [CATransaction commit];
+//stop HUD from collapsing when being changed:
+void (*oldHandleValueChanged)(CCUIVolumeSliderView* self, SEL _cmd, id arg1);
+void newHandleValueChanged(CCUIVolumeSliderView* self, SEL _cmd, id arg1)
+{
+	(*oldHandleValueChanged)(self, _cmd, arg1);
+	if ([self.window isKindOfClass:%c(SBHUDWindow)])
+		[[[%c(SBHUDController) sharedHUDController] collapseTimer] invalidate];
 }
 
-void reloadColors() {
-    NSDictionary *colors = [[NSDictionary alloc] initWithContentsOfFile:@"/var/mobile/Library/Preferences/me.nepeta.flashyhud-colors.plist"];
-    if (!colors) return;
+%ctor
+{
+	//load bundles:
+	NSArray* bundles = @[
+		@"/System/Library/ControlCenter/Bundles/AudioModule.bundle",
+		@"/System/Library/PrivateFrameworks/ControlCenterUIKit.framework",
+		@"/System/Library/PrivateFrameworks/ControlCenterServices.framework",
+		@"/System/Library/PrivateFrameworks/ControlCenterUI.framework"
+	];
 
-    mediaColor = [LCPParseColorString([colors objectForKey:@"MediaColor"], @"#ffffff:1.0") copy];
-    ringerColor = [LCPParseColorString([colors objectForKey:@"RingerColor"], @"#ffffff:1.0") copy];
-    gradientColor = [LCPParseColorString([colors objectForKey:@"GradientColor"], @"#000000:1.0") copy];
-    backgroundColor = [LCPParseColorString([colors objectForKey:@"BackgroundColor"], @"#000000:1.0") copy];
-    refreshHUD();
-}
-
-%ctor {
-    dpkgInvalid = ![[NSFileManager defaultManager] fileExistsAtPath:@"/var/lib/dpkg/info/me.nepeta.flashyhud.list"];
-
-    if (dpkgInvalid) {
-        %init(FlashyHUDIntegrityFail);
-        return;
-    }
-
-    preferences = [[HBPreferences alloc] initWithIdentifier:@"me.nepeta.flashyhud"];
-
-    [preferences registerBool:&enabled default:YES forKey:@"Enabled"];
-    [preferences registerBool:&hasShadow default:YES forKey:@"HasShadow"];
-    [preferences registerBool:&backgroundShadow default:YES forKey:@"BackgroundShadow"];
-    [preferences registerBool:&background default:YES forKey:@"Background"];
-    [preferences registerBool:&inverted default:NO forKey:@"Inverted"];
-    [preferences registerBool:&gradient default:NO forKey:@"Gradient"];
-    [preferences registerBool:&disableAnimations default:NO forKey:@"DisableAnimations"];
-    [preferences registerInteger:&location default:0 forKey:@"Location"];
-    [preferences registerFloat:&thickness default:5.0 forKey:@"Thickness"];
-    [preferences registerFloat:&size default:1.0 forKey:@"Size"];
-    [preferences registerFloat:&offset default:0.0 forKey:@"Offset"];
-    [preferences registerFloat:&horizontalOffset default:0.0 forKey:@"HorizontalOffset"];
-    [preferences registerFloat:&verticalOffset default:0.0 forKey:@"VerticalOffset"];
-    [preferences registerFloat:&cornerRadius default:0.0 forKey:@"CornerRadius"];
-    [preferences registerFloat:&opacity default:1.0 forKey:@"Opacity"];
-
-    mediaColor = [UIColor whiteColor];
-    ringerColor = [UIColor whiteColor];
-    gradientColor = [UIColor blackColor];
-    backgroundColor = [UIColor blackColor];
-
-    reloadColors();
-    CFNotificationCenterAddObserver(CFNotificationCenterGetDarwinNotifyCenter(), NULL, (CFNotificationCallback)reloadColors, (CFStringRef)@"me.nepeta.flashyhud/ReloadColors", NULL, (CFNotificationSuspensionBehavior)kNilOptions);
-    CFNotificationCenterAddObserver(CFNotificationCenterGetDarwinNotifyCenter(), NULL, (CFNotificationCallback)refreshHUD, (CFStringRef)@"me.nepeta.flashyhud/ReloadPrefs", NULL, (CFNotificationSuspensionBehavior)kNilOptions);
-
-    %init(FlashyHUD);
+	for (NSString* bundlePath in bundles)
+	{
+		NSBundle* bundle = [NSBundle bundleWithPath:bundlePath];
+		if (!bundle.loaded)
+			[bundle load];
+	}
+	
+	%init;
+	//I couldn't get logos to work, so let's do it manually
+	MSHookMessageEx(%c(CCUIVolumeSliderView), @selector(setContinuousSliderCornerRadius:), (IMP)&newSetCornerRadius, (IMP*)&oldSetCornerRadius);
+	MSHookMessageEx(%c(CCUIVolumeSliderView), @selector(_handleValueChangeGestureRecognizer:), (IMP)&newHandleValueChanged, (IMP*)&oldHandleValueChanged);
 }
