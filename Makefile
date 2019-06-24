@@ -1,16 +1,16 @@
-GO_EASY_ON_ME=1
+export ARCHS = armv7 arm64 arm64e
 
 include $(THEOS)/makefiles/common.mk
 THEOS_DEVICE_IP = 10.0.0.4
 
-BUNDLE_NAME = VolHUD
-VolHUD_FILES = HDDRootListController.m
-VolHUD_INSTALL_PATH = /Library/PreferenceBundles
-VolHUD_FRAMEWORKS = UIKit Preferences
-VolHUD_LDFLAGS += -F../Frameworks/
+TWEAK_NAME = VolHUD
+VolHUD_FILES = $(wildcard *.xm *.mm)
+VolHUD_FRAMEWORKS = UIKit
+VolHUD_CFLAGS = -fobjc-arc
 
-include $(THEOS_MAKE_PATH)/bundle.mk
+include $(THEOS_MAKE_PATH)/tweak.mk
 
-internal-stage::
-	$(ECHO_NOTHING)mkdir -p $(THEOS_STAGING_DIR)/Library/PreferenceLoader/Preferences$(ECHO_END)
-	$(ECHO_NOTHING)cp entry.plist $(THEOS_STAGING_DIR)/Library/PreferenceLoader/Preferences/VolHUD.plist$(ECHO_END)
+after-install::
+	install.exec "killall -9 SpringBoard"
+SUBPROJECTS += VolHUD
+include $(THEOS_MAKE_PATH)/aggregate.mk
