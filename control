@@ -1,9 +1,10 @@
-Package: me.nepeta.flashyhud
-Name: FlashyHUD
-Depends: mobilesubstrate, ws.hbang.common (>= 1.11), org.thebigboss.libcolorpicker
-Version: 0.1.1
+Package: com.yakir.volhud
+Name: VolHUD
+Depends: mobilesubstrate, preferenceloader
+Conflicts: applebetas.ios.tweak.willow, es.ubikstyl.sonus12, org.fwdr.sonus, com.midkin.byebyehud, me.nepeta.flashyhud, com.lnx.aerify, com.ruler225.videohud, me.nepeta.brokenhud
+Version: 1.0.0
 Architecture: iphoneos-arm
-Description: Minimalist volume HUD
-Maintainer: Nepeta
-Author: Nepeta
+Description: Modern volume HUD for iOS 11/12
+Maintainer: DevelopApple
+Author: DevelopApple
 Section: Tweaks
