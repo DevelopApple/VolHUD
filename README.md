@@ -1,3 +1,3 @@
-# FlashyHUD
+# volHUD
 
 Minimalist volume HUD.
