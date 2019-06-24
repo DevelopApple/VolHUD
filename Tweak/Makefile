@@ -1,13 +1,16 @@
-ARCHS = armv7 arm64
-TARGET = iphone:clang:11.2:5.0
+GO_EASY_ON_ME=1
 
 include $(THEOS)/makefiles/common.mk
+THEOS_DEVICE_IP = 10.0.0.4
 
-TWEAK_NAME = FlashyHUD
-$(TWEAK_NAME)_FILES = Tweak.xm
-ADDITIONAL_OBJCFLAGS = -fobjc-arc
-$(TWEAK_NAME)_FRAMEWORKS += UIKit QuartzCore WebKit
-$(TWEAK_NAME)_EXTRA_FRAMEWORKS = Cephei
-$(TWEAK_NAME)_LIBRARIES += colorpicker
+BUNDLE_NAME = VolHUD
+VolHUD_FILES = HDDRootListController.m
+VolHUD_INSTALL_PATH = /Library/PreferenceBundles
+VolHUD_FRAMEWORKS = UIKit Preferences
+VolHUD_LDFLAGS += -F../Frameworks/
 
-include $(THEOS_MAKE_PATH)/tweak.mk
+include $(THEOS_MAKE_PATH)/bundle.mk
+
+internal-stage::
+	$(ECHO_NOTHING)mkdir -p $(THEOS_STAGING_DIR)/Library/PreferenceLoader/Preferences$(ECHO_END)
+	$(ECHO_NOTHING)cp entry.plist $(THEOS_STAGING_DIR)/Library/PreferenceLoader/Preferences/VolHUD.plist$(ECHO_END)
